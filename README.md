@@ -37,11 +37,13 @@ jupyter lab
 - Hello World
 
 ### `GPU_Matrix_Multiplication.ipynb`
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rodtjarn/nbi/blob/main/GPU_Matrix_Multiplication.ipynb)
 - Matrix multiplication on an NVIDIA GPU using PyTorch + CUDA
 - Benchmarks GPU vs CPU (NumPy) and verifies correctness
 - Requires a local NVIDIA GPU with the PyTorch CUDA wheel installed
 
 ### `GPU_Matrix_AddSub_Colab.ipynb`
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rodtjarn/nbi/blob/main/GPU_Matrix_AddSub_Colab.ipynb)
 - Matrix addition and subtraction on GPU using PyTorch
 - Designed for **Google Colab** (PyTorch pre-installed, T4 GPU available)
 - Benchmarks GPU vs CPU and verifies correctness with a hand-checkable example

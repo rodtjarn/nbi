@@ -3,3 +3,5 @@ pandas==3.0.1
 matplotlib==3.10.8
 ipykernel
 jupyterlab
+cupy-cuda12x
+torch

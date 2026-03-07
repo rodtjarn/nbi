@@ -1,96 +1,82 @@
-To learn **CUDA architecture from scratch**, it helps to understand the **hardware model first**, because CUDA programming directly maps onto GPU hardware. I'll walk through the architecture step-by-step so the pieces connect logically.
+# CUDA Architecture Overview
+## Streaming Multiprocessors, Warps, and Threads
+
+This document introduces the core concepts behind **CUDA GPU architecture**.
+Understanding how GPUs execute programs is essential for writing efficient CUDA code.
+
+CUDA was developed by NVIDIA to allow programmers to use GPUs for **general-purpose computing**, not just graphics.
 
 ---
 
-# 1. What CUDA Is
+# 1. CPU vs GPU Architecture
 
-**CUDA (Compute Unified Device Architecture)** is a programming model created by NVIDIA that lets you use a GPU for **general-purpose computation**, not just graphics.
+CPUs and GPUs are designed for different workloads.
 
-A CUDA program has two sides:
+| CPU | GPU |
+|----|----|
+| Few powerful cores | Thousands of lightweight cores |
+| Optimized for low latency | Optimized for high throughput |
+| Complex control logic | Massive parallel execution |
+| Large caches | Many arithmetic units |
 
-| Component                      | Runs On |
-| ------------------------------ | ------- |
-| **Host code** (C/C++)          | CPU     |
-| **Device code** (CUDA kernels) | GPU     |
+CPUs are optimized for sequential tasks, while GPUs are optimized for **parallel workloads**.
 
-The CPU launches work on the GPU by calling a **kernel**.
+---
+
+# 2. CUDA Programming Model
+
+A CUDA program consists of two parts:
+
+| Component | Runs On |
+|-----------|---------|
+| Host code | CPU |
+| Device code | GPU |
+
+The CPU launches work on the GPU using a **kernel**.
 
 Example:
 
 ```cpp
 kernel<<<numBlocks, threadsPerBlock>>>(args);
-```
+````
 
-This launches **thousands of GPU threads** in parallel.
-
----
-
-# 2. GPU vs CPU Architecture
-
-CPUs and GPUs are designed very differently.
-
-| CPU                   | GPU                      |
-| --------------------- | ------------------------ |
-| Few cores (4–64)      | Thousands of cores       |
-| Optimized for latency | Optimized for throughput |
-| Large caches          | Many lightweight cores   |
-| Branch-heavy code     | Massive parallelism      |
-
-GPUs sacrifice complex control logic to gain **massive parallel execution**.
+This launches thousands of threads on the GPU.
 
 ---
 
-# 3. High-Level GPU Architecture
+# 3. GPU High-Level Architecture
 
-![Image](https://www.researchgate.net/publication/283559088/figure/fig6/AS%3A668707948879879%401536443807459/Typical-NVIDIA-GPU-architecture-The-GPU-is-comprised-of-a-set-of-Streaming.ppm)
-
-![Image](https://www.researchgate.net/publication/263125933/figure/fig3/AS%3A1088941113524225%401636635201101/Schematic-description-of-CUDAs-architecture-in-terms-of-threads-and-memory-hierarchy.jpg)
-
-![Image](https://fabiensanglard.net/cuda/tesla2.svg)
-
-![Image](https://stevengong.co/attachments/Screenshot-2023-11-06-at-11.30.06-PM.png)
-
-A modern CUDA GPU contains:
+A CUDA-capable GPU consists of multiple **Streaming Multiprocessors (SMs)**.
 
 ```
 GPU
- ├── Many SMs (Streaming Multiprocessors)
- │     ├── CUDA cores
- │     ├── Warp schedulers
- │     ├── Registers
- │     ├── Shared memory
+ ├── SM
+ │    ├── CUDA cores
+ │    ├── warp schedulers
+ │    ├── registers
+ │    ├── shared memory
  │
- ├── L2 Cache
- └── Global memory (VRAM)
+ ├── L2 cache
+ └── global memory (VRAM)
 ```
 
-Think of an **SM** as a small CPU-like processor that runs many threads.
+Each SM executes many threads in parallel.
 
 ---
 
 # 4. Streaming Multiprocessors (SM)
 
-The **SM** is the fundamental execution unit.
+The **SM** is the primary execution unit of the GPU.
 
 Each SM contains:
 
-| Component        | Purpose                       |
-| ---------------- | ----------------------------- |
-| CUDA cores       | Arithmetic operations         |
-| Warp schedulers  | Schedule thread execution     |
-| Registers        | Per-thread storage            |
-| Shared memory    | Fast memory shared by threads |
-| Tensor cores     | Matrix math acceleration      |
-| Load/store units | Memory access                 |
+* CUDA cores for arithmetic operations
+* Warp schedulers
+* Registers
+* Shared memory
+* Load/store units
 
-Example GPU:
-
-| GPU      | SM count |
-| -------- | -------- |
-| RTX 4090 | 128 SMs  |
-| A100     | 108 SMs  |
-
-Each SM runs **many warps simultaneously**.
+Blocks of threads are assigned to SMs during execution.
 
 ---
 
@@ -100,20 +86,21 @@ A **thread** is the smallest execution unit.
 
 Each thread:
 
-* Executes the same kernel code
+* Executes the kernel code
 * Has its own registers
-* Has its own thread ID
+* Has a unique ID
 
 Example kernel:
 
 ```cpp
-__global__ void add(int *a, int *b, int *c) {
+__global__ void add(int *a, int *b, int *c)
+{
     int i = threadIdx.x;
     c[i] = a[i] + b[i];
 }
 ```
 
-If launched with 256 threads, **256 additions happen in parallel**.
+If 256 threads run this kernel, 256 additions happen in parallel.
 
 ---
 
@@ -121,97 +108,82 @@ If launched with 256 threads, **256 additions happen in parallel**.
 
 Threads are grouped into **blocks**.
 
-```
-Kernel Launch
-   ↓
-Grid
-   ↓
-Blocks
-   ↓
-Threads
-```
-
-Example:
+Execution hierarchy:
 
 ```
-grid
- ├─ block 0
- │   ├ thread
- │   ├ thread
- │   └ thread
- ├─ block 1
- └─ block 2
+Kernel
+ └ Grid
+     └ Block
+         └ Thread
 ```
-
-Properties:
-
-* Threads in a block **can synchronize**
-* Threads in a block **share shared memory**
-* Blocks run on **one SM**
 
 Example launch:
 
 ```cpp
-kernel<<<32 blocks, 256 threads>>>();
+kernel<<<32, 256>>>();
 ```
 
 Total threads:
 
 ```
-32 × 256 = 8192 threads
+32 blocks × 256 threads = 8192 threads
 ```
+
+Threads within a block can:
+
+* synchronize
+* share memory
 
 ---
 
-# 7. Warps (Critical Concept)
+# 7. Warps
 
-Inside the SM, threads execute in **warps**.
-
-A **warp = 32 threads**.
-
-The hardware schedules execution **per warp**, not per thread.
+Inside the GPU hardware, threads execute in groups called **warps**.
 
 ```
-block
- ├ warp 0 (32 threads)
- ├ warp 1 (32 threads)
- ├ warp 2 (32 threads)
- └ warp 3 (32 threads)
+warp = 32 threads
 ```
 
-If a block has 256 threads:
+Threads in a warp execute instructions together.
+
+Example block:
 
 ```
+256 threads per block
 256 / 32 = 8 warps
 ```
 
+Warps are the unit scheduled by the hardware.
+
 ---
 
-# 8. SIMT Execution
+# 8. SIMT Execution Model
 
-CUDA uses **SIMT**:
+CUDA uses **SIMT (Single Instruction Multiple Threads)**.
 
-**Single Instruction Multiple Threads**
-
-A warp executes the **same instruction at the same time**.
+Threads execute the same instruction simultaneously across a warp.
 
 Example:
 
 ```
-warp threads
-t0: c=a+b
-t1: c=a+b
-t2: c=a+b
+warp
+thread0 → execute instruction
+thread1 → execute instruction
+thread2 → execute instruction
 ...
+thread31 → execute instruction
 ```
 
-All 32 threads execute the instruction simultaneously.
+This allows GPUs to execute large numbers of threads efficiently.
 
 ---
 
 # 9. Warp Divergence
 
-If threads take different branches:
+Threads in a warp normally follow the same execution path.
+When threads follow different branches, **warp divergence** occurs.
+
+Example:
 
 ```cpp
 if (threadIdx.x % 2)
@@ -220,178 +192,147 @@ else
     do_B();
 ```
 
-Then:
+This condition sends:
+
+* **odd threads → do_A()**
+* **even threads → do_B()**
+
+Within one warp:
 
 ```
-warp
-threads 0..15 -> A
+thread 0  -> B
+thread 1  -> A
+thread 2  -> B
+thread 3  -> A
+...
+thread 30 -> B
+thread 31 -> A
+```
+
+Because different threads in the warp take different branches, the GPU executes both paths sequentially:
+
+1. Execute `do_A()` with only the odd threads active
+2. Execute `do_B()` with only the even threads active
+
+Threads that are not participating in the current branch are temporarily disabled.
+
+This reduces efficiency because only part of the warp is active at a time.
+
+Another example:
+
+```cpp
+if (threadIdx.x < 16)
+    do_A();
+else
+    do_B();
+```
+
+This divides the warp into two groups:
+
+```
+threads 0..15  -> A
 threads 16..31 -> B
 ```
 
-The GPU must run both paths **serially**, reducing performance.
+Warp divergence still occurs because different threads follow different control paths.
 
-This is called **warp divergence**.
+When all threads follow the same branch, divergence does not occur:
+
+```cpp
+if (blockIdx.x % 2)
+    do_A();
+else
+    do_B();
+```
+
+All threads in the block see the same `blockIdx.x`, so every thread in the warp executes the same instructions.
+
+Key points:
+
+* A warp contains **32 threads**
+* Warps execute instructions **in lockstep**
+* Divergence occurs when threads follow **different branches**
+* Divergent branches execute **sequentially**
 
 ---
 
 # 10. Memory Hierarchy
 
-![Image](https://doc.sling.si/workshops/programming-gpu-cuda/02-GPU/img/MemoryHierarchyPROG.png)
+CUDA has multiple memory types with different speeds.
 
-![Image](https://global.discourse-cdn.com/nvidia/optimized/4X/3/a/a/3aaf3f9a8f8c92f332f6392c6f8082bdf0e5b25b_2_432x500.png)
+| Memory        | Speed     | Scope         |
+| ------------- | --------- | ------------- |
+| Registers     | Fastest   | Per thread    |
+| Shared memory | Very fast | Per block     |
+| L1 cache      | Fast      | Per SM        |
+| L2 cache      | Medium    | Entire GPU    |
+| Global memory | Slow      | Entire device |
 
-![Image](https://images.openai.com/static-rsc-3/2r5cD0BYjNrNOGfNdF5M2PO3FnObac6DwyyjyBAx5RkG4oNQ5ya__RTElgByf7fU6qnhr6w7WbDk9XfvpBj4ZxRZNkjXo36n_VO4376LyqE?purpose=fullsize\&v=1)
-
-![Image](https://cdn.prod.website-files.com/61dda201f29b7efc52c5fbaf/66bbb1c6c29685d149b7c411_6501bc80f7c8699c8511c0fc_memory-hierarchy-in-gpus.png)
-
-Memory speed hierarchy:
-
-| Memory        | Speed   | Scope       |
-| ------------- | ------- | ----------- |
-| Registers     | fastest | per thread  |
-| Shared memory | fast    | per block   |
-| L1 cache      | fast    | per SM      |
-| L2 cache      | medium  | whole GPU   |
-| Global memory | slow    | device-wide |
-
-Typical latency:
+Approximate latency:
 
 ```
-register     ~1 cycle
-shared       ~20 cycles
-L2           ~200 cycles
-global       ~400–800 cycles
+registers    ~1 cycle
+shared mem   ~20 cycles
+L2 cache     ~200 cycles
+global mem   ~400–800 cycles
 ```
 
-Efficient CUDA programs **minimize global memory access**.
+Efficient CUDA programs minimize accesses to global memory.
 
 ---
 
 # 11. Kernel Execution Flow
 
-Full execution flow:
+The typical CUDA execution flow:
 
 ```
 CPU launches kernel
       ↓
 Grid created
       ↓
-Blocks scheduled onto SMs
+Blocks assigned to SMs
       ↓
-Blocks split into warps
+Blocks divided into warps
       ↓
-Warp scheduler executes instructions
+Warp schedulers execute instructions
 ```
 
-Example GPU:
-
-```
-80 SMs
-1000 blocks
-
-→ blocks distributed dynamically
-```
-
-The GPU keeps **SMs busy with many blocks**.
+The GPU dynamically schedules warps to keep the hardware busy.
 
 ---
 
 # 12. Occupancy
 
-**Occupancy = active warps / maximum warps per SM**
+**Occupancy** measures how many warps are active on an SM.
 
-Higher occupancy:
+```
+occupancy = active warps / maximum warps
+```
 
-* hides memory latency
-* improves throughput
+Higher occupancy helps hide memory latency.
 
-Limited by:
+Occupancy depends on:
 
-* registers per thread
-* shared memory per block
+* register usage
+* shared memory usage
 * block size
 
 ---
 
-# 13. Typical Thread Hierarchy Example
+# 13. Example CUDA Program
 
-Example launch:
-
-```cpp
-kernel<<<128,256>>>();
-```
-
-Hierarchy:
-
-```
-128 blocks
-256 threads/block
-8192 total threads
-
-per block:
-256 / 32 = 8 warps
-```
-
-GPU schedules those warps across SMs.
-
----
-
-# 14. Why GPUs Are Fast
-
-GPU speed comes from:
-
-1. Massive parallelism
-2. Warp scheduling hides latency
-3. Simple cores but many of them
-4. Hardware context switching between warps
-
-While one warp waits for memory:
-
-```
-warp0 → waiting
-warp1 → execute
-warp2 → execute
-warp3 → execute
-```
-
-No idle cycles.
-
----
-
-# 15. CUDA Architecture Summary
-
-```
-GPU
- ├ SM
- │   ├ warp scheduler
- │   ├ CUDA cores
- │   ├ registers
- │   ├ shared memory
- │
- ├ L2 cache
- └ global memory
-```
-
-Execution hierarchy:
-
-```
-Kernel
- └ Grid
-     └ Block
-         └ Warp (32 threads)
-             └ Thread
-```
-
----
-
-# 16. Minimal CUDA Program
+Minimal CUDA program:
 
 ```cpp
-__global__ void hello() {
+#include <stdio.h>
+
+__global__ void hello()
+{
     printf("Hello from thread %d\n", threadIdx.x);
 }
 
-int main() {
+int main()
+{
     hello<<<1,8>>>();
     cudaDeviceSynchronize();
 }
@@ -402,21 +343,30 @@ Output:
 ```
 Hello from thread 0
 Hello from thread 1
+Hello from thread 2
 ...
 Hello from thread 7
 ```
 
+Each thread runs the same kernel code independently.
+
 ---
 
-✅ If you'd like, I can also explain the **advanced GPU architecture concepts most CUDA programmers never fully understand**, like:
+# Summary
 
-* **warp schedulers**
-* **instruction issue slots**
-* **memory coalescing**
-* **register file design**
-* **tensor cores**
-* **thread block scheduling**
-* **latency hiding**
+Key CUDA architecture concepts:
 
-Those concepts are what separate **basic CUDA users from GPU architecture experts**.
+* GPUs contain many **Streaming Multiprocessors**
+* Each SM executes many **warps**
+* A warp contains **32 threads**
+* Threads are organized into **blocks and grids**
+* Divergent control flow causes **warp divergence**
+* Efficient programs minimize divergence and global memory access
+
+```
+
+---
+
+If you'd like, I can also produce a **second version of this `.md` optimized for slides** (so it works perfectly with your Neovim `MarkdownPreview` as a presentation).
+```
 

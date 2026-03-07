@@ -5,3 +5,5 @@ ipykernel
 jupyterlab
 cupy-cuda12x
 torch
+notebook-intelligence
+pycuda

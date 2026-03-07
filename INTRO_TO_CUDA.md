@@ -363,10 +363,10 @@ Key CUDA architecture concepts:
 * Divergent control flow causes **warp divergence**
 * Efficient programs minimize divergence and global memory access
 
-```
-
 ---
 
-If you'd like, I can also produce a **second version of this `.md` optimized for slides** (so it works perfectly with your Neovim `MarkdownPreview` as a presentation).
-```
+# Further Reading
 
+CUDA-style GPU programming in Python can also be explored using **CuPy**.
+
+[CuPy Basic User Guide](https://docs.cupy.dev/en/stable/user_guide/basic.html#current-stream)
